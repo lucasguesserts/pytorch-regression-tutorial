@@ -6,6 +6,7 @@ from tqdm import tqdm
 
 import torch
 import torch.nn as nn
+import torchinfo
 
 RANDOM_SEED = 42
 
@@ -22,21 +23,24 @@ def generate_data(fn):
     return (X, Y, YN)
 
 
-def make_model():
-    model = nn.Sequential(
-        nn.Linear(1, 64),
-        nn.ReLU(),
-        nn.Linear(64, 64),
-        nn.ReLU(),
-        nn.Linear(64, 1),
-    )
+def make_model(number_of_hidden_layers, number_of_nodes_in_each_hidden_layer):
+    model = nn.Sequential()
+    for _ in range(number_of_hidden_layers):
+        model.append(nn.Linear(1, number_of_nodes_in_each_hidden_layer))
+        model.append(nn.ReLU())
+    model.append(nn.Linear(number_of_nodes_in_each_hidden_layer, 1))
     return model
+
+
+def make_summary(model):
+    torchinfo.summary(model, (1,))
+    return
 
 
 def optimize(model):
     ## initialize
     loss_function = nn.MSELoss()  # loss function - mean square error
-    optimizer = torch.optim.Adam(model.parameters(), lr=1.0e-3)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1.0e-2)
     number_of_iterations = 8000
     loss_values_history = []
 
@@ -100,6 +104,8 @@ def plot(X, Y, YN, model):
 
 if __name__ == "__main__":
     X, Y, YN = generate_data(torch.exp)
-    model = make_model()
+    model = make_model(1, 16)
+    make_summary(model)
     loss_values_history = optimize(model)
+    print(f"mean square error = {loss_values_history[-1]:.4f}")
     plot(X, Y, YN, model)
