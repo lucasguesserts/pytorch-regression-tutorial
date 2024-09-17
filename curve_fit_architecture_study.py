@@ -12,6 +12,7 @@ import torch.nn as nn
 import torchinfo
 
 RANDOM_SEED = 42
+torch.set_num_threads(1)
 
 
 def parse_args():
@@ -199,7 +200,7 @@ def log(model_info, error, args):
 
 if __name__ == "__main__":
     args = parse_args()
-    X, Y, YN = generate_data(torch.exp)
+    X, Y, YN = generate_data(torch.sin)
     model = make_model(
         args.number_of_hidden_layers, args.number_of_nodes_in_each_hidden_layer
     )
