@@ -1,4 +1,7 @@
+#!/usr/bin/env python
+
 import random
+import argparse
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -9,6 +12,78 @@ import torch.nn as nn
 import torchinfo
 
 RANDOM_SEED = 42
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "-nl",
+        "--number-of-hidden-layers",
+        help="number of hidden layers of the model, the layers between the input and output layers",
+        metavar="L",
+        type=int,
+        required=True,
+        dest="number_of_hidden_layers",
+    )
+    parser.add_argument(
+        "-nn",
+        "--number-of-nodes-in-each-hidden-layer",
+        help="number of hidden layers of the model, the layers between the input and output layers",
+        metavar="N",
+        type=int,
+        required=True,
+        dest="number_of_nodes_in_each_hidden_layer",
+    )
+    parser.add_argument(
+        "-f",
+        "--figure",
+        help="path of file where to save the figure",
+        metavar="F",
+        type=str,
+        required=False,
+        dest="figure",
+        default="curve_fit.jpg",
+    )
+    parser.add_argument(
+        "-lr",
+        "--learning-rate",
+        help="path of file where to save the figure",
+        metavar="LR",
+        type=float,
+        required=False,
+        dest="learning_rate",
+        default=1.0e-3,
+    )
+    parser.add_argument(
+        "-i",
+        "--number-of-iterations",
+        help="number of epochs/iterations of the learning",
+        metavar="NI",
+        type=int,
+        required=False,
+        dest="number_of_iterations",
+        default=8000,
+    )
+    parser.add_argument(
+        "-d",
+        "--debug",
+        help="enable debug messages",
+        type=bool,
+        required=False,
+        action=argparse.BooleanOptionalAction,
+        dest="debug",
+    )
+    parser.add_argument(
+        "--csv",
+        help="enable csv output",
+        type=bool,
+        required=False,
+        action=argparse.BooleanOptionalAction,
+        dest="csv",
+    )
+    parser.set_defaults(debug=False)
+    args = parser.parse_args()
+    return args
 
 
 def generate_data(fn):
@@ -25,27 +100,32 @@ def generate_data(fn):
 
 def make_model(number_of_hidden_layers, number_of_nodes_in_each_hidden_layer):
     model = nn.Sequential()
+    current_input_size = 1
     for _ in range(number_of_hidden_layers):
-        model.append(nn.Linear(1, number_of_nodes_in_each_hidden_layer))
+        model.append(nn.Linear(current_input_size, number_of_nodes_in_each_hidden_layer))
         model.append(nn.ReLU())
-    model.append(nn.Linear(number_of_nodes_in_each_hidden_layer, 1))
+        current_input_size = number_of_nodes_in_each_hidden_layer
+    model.append(nn.Linear(current_input_size, 1))
     return model
 
 
-def make_summary(model):
-    torchinfo.summary(model, (1,))
-    return
+def make_summary(model, debug):
+    verbosity = 1 if debug else 0
+    model_info = torchinfo.summary(model, (1,), verbose=verbosity)
+    return model_info
 
 
-def optimize(model):
+def optimize(model, learning_rate, number_of_iterations, debug):
     ## initialize
     loss_function = nn.MSELoss()  # loss function - mean square error
-    optimizer = torch.optim.Adam(model.parameters(), lr=1.0e-2)
-    number_of_iterations = 8000
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     loss_values_history = []
 
     ## optimization procedure
-    for _ in tqdm(range(number_of_iterations), desc="optimize", ascii=True):
+    loop = range(number_of_iterations)
+    if debug:
+        loop = tqdm(loop, desc="optimize", ascii=True)
+    for _ in loop:
         # reinitialize gradients
         optimizer.zero_grad()
         # making predictions with forward pass
@@ -62,11 +142,11 @@ def optimize(model):
     return loss_values_history
 
 
-def plot(X, Y, YN, model):
+def plot(X, Y, YN, model, file_path):
     fig, axes = plt.subplots(nrows=1, ncols=3, squeeze=True, figsize=(3 * 6, 6))
 
     with torch.no_grad():
-        YP = model.forward(X) # model prediction
+        YP = model.forward(X)  # model prediction
         diff = torch.abs(YP - Y) / Y
         diffN = torch.abs(YP - YN) / Y
 
@@ -98,14 +178,32 @@ def plot(X, Y, YN, model):
     ax.grid("True")
 
     fig.tight_layout()
-    fig.savefig('curve_fit.jpg')
+    fig.savefig(file_path)
+    return
+
+
+def log(model_info, error, args):
+    # model_info: torchinfo.ModelStatistics
+    # https://github.com/TylerYep/torchinfo/blob/main/torchinfo/model_statistics.py
+    if args.csv:
+        print(f"{args.number_of_hidden_layers:d},{args.number_of_nodes_in_each_hidden_layer:d},{model_info.trainable_params:d},{args.number_of_iterations:d},{args.learning_rate:.2e},{error:.4f}")
+    else:
+        print(f"{'number_of_hidden_layers':40s} = {args.number_of_hidden_layers:d}")
+        print(f"{'number_of_nodes_in_each_hidden_layer':40s} = {args.number_of_nodes_in_each_hidden_layer:d}")
+        print(f"{'trainable_params':40s} = {model_info.trainable_params:d}")
+        print(f"{'number_of_iterations':40s} = {args.number_of_iterations:d}")
+        print(f"{'learning_rate':40s} = {args.learning_rate:e}")
+        print(f"{'error':40s} = {error:.4f}")
     return
 
 
 if __name__ == "__main__":
+    args = parse_args()
     X, Y, YN = generate_data(torch.exp)
-    model = make_model(1, 16)
-    make_summary(model)
-    loss_values_history = optimize(model)
-    print(f"mean square error = {loss_values_history[-1]:.4f}")
-    plot(X, Y, YN, model)
+    model = make_model(
+        args.number_of_hidden_layers, args.number_of_nodes_in_each_hidden_layer
+    )
+    model_info = make_summary(model, args.debug)
+    loss_values_history = optimize(model, args.learning_rate, args.number_of_iterations, args.debug)
+    plot(X, Y, YN, model, args.figure)
+    log(model_info, loss_values_history[-1], args)
