@@ -95,7 +95,8 @@ def generate_data(fn):
     # data
     X = torch.linspace(-5, 5, 100).view(-1, 1)
     Y = fn(X)
-    YN = Y + 1.0 * torch.randn(X.size())  # with noise
+    # YN = Y + 1.0 * torch.randn(X.size())  # with noise
+    YN = Y
     return (X, Y, YN)
 
 
@@ -148,8 +149,8 @@ def plot(X, Y, YN, model, file_path):
 
     with torch.no_grad():
         YP = model.forward(X)  # model prediction
-        diff = torch.abs(YP - Y) / Y
-        diffN = torch.abs(YP - YN) / Y
+        diff = torch.abs(YP - Y) / torch.abs(Y)
+        diffN = torch.abs(YP - YN) / torch.abs(Y)
 
     # data with prediction
     ax = axes[0]
@@ -171,8 +172,8 @@ def plot(X, Y, YN, model, file_path):
 
     # difference between the data and the prediction
     ax = axes[2]
-    ax.semilogy(X.numpy(), diff.numpy(), "r-", label="|YPT - Y| / Y")
-    ax.semilogy(X.numpy(), diffN.numpy(), "b-", label="|YPT - YN| / Y")
+    ax.semilogy(X.numpy(), diff.numpy(), "r-", label="|YPT - Y| / |Y|")
+    ax.semilogy(X.numpy(), diffN.numpy(), "b-", label="|YPT - YN| / |Y|")
     ax.set_xlabel("x")
     ax.set_ylabel("y")
     ax.legend()
@@ -187,14 +188,14 @@ def log(model_info, error, args):
     # model_info: torchinfo.ModelStatistics
     # https://github.com/TylerYep/torchinfo/blob/main/torchinfo/model_statistics.py
     if args.csv:
-        print(f"{args.number_of_hidden_layers:d},{args.number_of_nodes_in_each_hidden_layer:d},{model_info.trainable_params:d},{args.number_of_iterations:d},{args.learning_rate:.2e},{error:.4f}")
+        print(f"{args.number_of_hidden_layers:d},{args.number_of_nodes_in_each_hidden_layer:d},{model_info.trainable_params:d},{args.number_of_iterations:d},{args.learning_rate:.2e},{error:e}")
     else:
         print(f"{'number_of_hidden_layers':40s} = {args.number_of_hidden_layers:d}")
         print(f"{'number_of_nodes_in_each_hidden_layer':40s} = {args.number_of_nodes_in_each_hidden_layer:d}")
         print(f"{'trainable_params':40s} = {model_info.trainable_params:d}")
         print(f"{'number_of_iterations':40s} = {args.number_of_iterations:d}")
         print(f"{'learning_rate':40s} = {args.learning_rate:e}")
-        print(f"{'error':40s} = {error:.4f}")
+        print(f"{'error':40s} = {error:e}")
     return
 
 
