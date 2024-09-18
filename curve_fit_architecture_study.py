@@ -93,8 +93,12 @@ def generate_data(fn):
     torch.manual_seed(RANDOM_SEED)
     np.random.seed(RANDOM_SEED)
     # data
-    X = torch.linspace(-5, 5, 100).view(-1, 1)
+    X = torch.linspace(0, 5, 1000).view(-1, 1)
     Y = fn(X)
+    # remove zeros
+    valid = (torch.abs(Y) > 1.0e-5)
+    X = X[valid].view(-1, 1)
+    Y = Y[valid].view(-1, 1)
     return (X, Y)
 
 
@@ -145,7 +149,7 @@ def optimize(X, Y, model, learning_rate, number_of_iterations, debug):
     return loss_values_history
 
 
-def plot(X, Y, model, file_path):
+def plot(X, Y, model, n_trainable_params, file_path):
     number_of_axes = 4
     fig, axes = plt.subplots(
         nrows=1,
@@ -153,7 +157,7 @@ def plot(X, Y, model, file_path):
         squeeze=True,
         figsize=(number_of_axes * 6, 6),
     )
-    fig.suptitle(file_path.split("/")[-1].split(".")[:-1])
+    fig.suptitle(str(n_trainable_params) + " - " + "_".join(file_path.split("/")[-1].split(".")[:-1]))
 
     with torch.no_grad():
         YP = model.forward(X)  # model prediction
@@ -163,7 +167,7 @@ def plot(X, Y, model, file_path):
     ax = axes[0]
     ax.set_title("Real and Predicted Values - Linear Scale")
     ax.plot(X.numpy(), Y.numpy(), "k.", label="real")
-    ax.plot(X.numpy(), YP.numpy(), "r--", label="predicted")
+    ax.plot(X.numpy(), YP.numpy(), "r--", marker=".", label="predicted")
     ax.set_xlabel("x")
     ax.set_ylabel("y")
     ax.legend()
@@ -171,9 +175,9 @@ def plot(X, Y, model, file_path):
 
     # data with prediction
     ax = axes[1]
-    ax.set_title("Real and Predicted Values - Log Scale")
-    ax.semilogy(X.numpy(), Y.numpy(), "k.", label="real")
-    ax.semilogy(X.numpy(), YP.numpy(), "r--", label="predicted")
+    ax.set_title("Absolute of the Real and Predicted Values - Log Scale")
+    ax.semilogy(X.numpy(), torch.abs(Y).numpy(), "k.", label="real")
+    ax.semilogy(X.numpy(), torch.abs(YP).numpy(), "r--", marker=".", label="predicted")
     ax.set_xlabel("x")
     ax.set_ylabel("y")
     ax.legend()
@@ -224,8 +228,8 @@ def log(model_info, error, args):
 
 if __name__ == "__main__":
     args = parse_args()
-    # fn = lambda x: 3 * torch.sin(x) + 2 * torch.sin(2 * x) + 4 * torch.cos(4 * x)
-    fn = lambda x: torch.sin(x)
+    # fn = lambda x: x * torch.sin(x) + 2 * torch.tanh(x) * torch.sin(2*x) + 0.1 * x**2 * torch.cos(4*x)
+    fn = lambda x: torch.exp(x)
     X, Y = generate_data(fn)
     model = make_model(
         args.number_of_hidden_layers, args.number_of_nodes_in_each_hidden_layer
@@ -239,5 +243,5 @@ if __name__ == "__main__":
         args.number_of_iterations,
         args.debug,
     )
-    plot(X, Y, model, args.figure)
+    plot(X, Y, model, model_info.trainable_params, args.figure)
     log(model_info, loss_values_history[-1], args)
