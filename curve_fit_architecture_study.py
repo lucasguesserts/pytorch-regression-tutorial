@@ -95,16 +95,16 @@ def generate_data(fn):
     # data
     X = torch.linspace(-5, 5, 100).view(-1, 1)
     Y = fn(X)
-    # YN = Y + 1.0 * torch.randn(X.size())  # with noise
-    YN = Y
-    return (X, Y, YN)
+    return (X, Y)
 
 
 def make_model(number_of_hidden_layers, number_of_nodes_in_each_hidden_layer):
     model = nn.Sequential()
     current_input_size = 1
     for _ in range(number_of_hidden_layers):
-        model.append(nn.Linear(current_input_size, number_of_nodes_in_each_hidden_layer))
+        model.append(
+            nn.Linear(current_input_size, number_of_nodes_in_each_hidden_layer)
+        )
         model.append(nn.ReLU())
         current_input_size = number_of_nodes_in_each_hidden_layer
     model.append(nn.Linear(current_input_size, 1))
@@ -117,7 +117,7 @@ def make_summary(model, debug):
     return model_info
 
 
-def optimize(model, learning_rate, number_of_iterations, debug):
+def optimize(X, Y, model, learning_rate, number_of_iterations, debug):
     ## initialize
     loss_function = nn.MSELoss()  # loss function - mean square error
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
@@ -131,9 +131,9 @@ def optimize(model, learning_rate, number_of_iterations, debug):
         # reinitialize gradients
         optimizer.zero_grad()
         # making predictions with forward pass
-        Y_pred = model.forward(X)
+        YP = model.forward(X)
         # calculating the loss between original and predicted data points
-        loss = loss_function(Y_pred, YN)
+        loss = loss_function(YP, Y)
         # backward pass for computing the gradients of the loss w.r.t to learnable parameters
         loss.backward()
         # updateing the parameters after each iteration
@@ -144,19 +144,24 @@ def optimize(model, learning_rate, number_of_iterations, debug):
     return loss_values_history
 
 
-def plot(X, Y, YN, model, file_path):
-    fig, axes = plt.subplots(nrows=1, ncols=3, squeeze=True, figsize=(3 * 6, 6))
+def plot(X, Y, model, file_path):
+    number_of_axes = 3
+    fig, axes = plt.subplots(
+        nrows=1,
+        ncols=number_of_axes,
+        squeeze=True,
+        figsize=(number_of_axes * 6, 6),
+    )
 
     with torch.no_grad():
         YP = model.forward(X)  # model prediction
         diff = torch.abs(YP - Y) / torch.abs(Y)
-        diffN = torch.abs(YP - YN) / torch.abs(Y)
 
     # data with prediction
     ax = axes[0]
-    ax.plot(X.numpy(), Y.numpy(), "k", label="Y")
-    ax.plot(X.numpy(), YN.numpy(), "b.", label="YN")
-    ax.plot(X.numpy(), YP.numpy(), "r--", label="NN")
+    ax.set_title("Real and Predicted Values")
+    ax.plot(X.numpy(), Y.numpy(), "k.", label="real")
+    ax.plot(X.numpy(), YP.numpy(), "r--", label="predicted")
     ax.set_xlabel("x")
     ax.set_ylabel("y")
     ax.legend()
@@ -164,18 +169,19 @@ def plot(X, Y, YN, model, file_path):
 
     # loss history
     ax = axes[1]
+    ax.set_title("Model Loss History")
     ax.semilogy(loss_values_history, "r")
     ax.grid("True")
     ax.grid("True", which="minor", linestyle="--")
-    ax.set_xlabel("Epochs/Iterations")
+    ax.set_xlabel("Epochs / Iterations")
     ax.set_ylabel("Loss")
 
     # difference between the data and the prediction
     ax = axes[2]
+    ax.set_title("Relative Difference")
     ax.semilogy(X.numpy(), diff.numpy(), "r-", label="|YPT - Y| / |Y|")
-    ax.semilogy(X.numpy(), diffN.numpy(), "b-", label="|YPT - YN| / |Y|")
     ax.set_xlabel("x")
-    ax.set_ylabel("y")
+    ax.set_ylabel("relative difference")
     ax.legend()
     ax.grid("True")
 
@@ -188,10 +194,14 @@ def log(model_info, error, args):
     # model_info: torchinfo.ModelStatistics
     # https://github.com/TylerYep/torchinfo/blob/main/torchinfo/model_statistics.py
     if args.csv:
-        print(f"{args.number_of_hidden_layers:d},{args.number_of_nodes_in_each_hidden_layer:d},{model_info.trainable_params:d},{args.number_of_iterations:d},{args.learning_rate:.2e},{error:e}")
+        print(
+            f"{args.number_of_hidden_layers:d},{args.number_of_nodes_in_each_hidden_layer:d},{model_info.trainable_params:d},{args.number_of_iterations:d},{args.learning_rate:.2e},{error:e}"
+        )
     else:
         print(f"{'number_of_hidden_layers':40s} = {args.number_of_hidden_layers:d}")
-        print(f"{'number_of_nodes_in_each_hidden_layer':40s} = {args.number_of_nodes_in_each_hidden_layer:d}")
+        print(
+            f"{'number_of_nodes_in_each_hidden_layer':40s} = {args.number_of_nodes_in_each_hidden_layer:d}"
+        )
         print(f"{'trainable_params':40s} = {model_info.trainable_params:d}")
         print(f"{'number_of_iterations':40s} = {args.number_of_iterations:d}")
         print(f"{'learning_rate':40s} = {args.learning_rate:e}")
@@ -201,11 +211,18 @@ def log(model_info, error, args):
 
 if __name__ == "__main__":
     args = parse_args()
-    X, Y, YN = generate_data(torch.sin)
+    X, Y = generate_data(torch.exp)
     model = make_model(
         args.number_of_hidden_layers, args.number_of_nodes_in_each_hidden_layer
     )
     model_info = make_summary(model, args.debug)
-    loss_values_history = optimize(model, args.learning_rate, args.number_of_iterations, args.debug)
-    plot(X, Y, YN, model, args.figure)
+    loss_values_history = optimize(
+        X,
+        Y,
+        model,
+        args.learning_rate,
+        args.number_of_iterations,
+        args.debug,
+    )
+    plot(X, Y, model, args.figure)
     log(model_info, loss_values_history[-1], args)
