@@ -33,6 +33,9 @@ def plot(data, x, y, dir):
         xlabel=x,
         ylabel=y,
         legend=False,
+        style="-",
+        marker=".",
+        color="black",
         title=f"{y}\nas a function of\n{x}",
     )
     # save

@@ -119,7 +119,8 @@ def make_summary(model, debug):
 
 def optimize(X, Y, model, learning_rate, number_of_iterations, debug):
     ## initialize
-    loss_function = nn.MSELoss()  # loss function - mean square error
+    loss_function = lambda yp, y: torch.mean(torch.abs(yp - y) / torch.abs(y))
+    # loss_function = nn.MSELoss()  # loss function - mean square error
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     loss_values_history = []
 
@@ -145,13 +146,14 @@ def optimize(X, Y, model, learning_rate, number_of_iterations, debug):
 
 
 def plot(X, Y, model, file_path):
-    number_of_axes = 3
+    number_of_axes = 4
     fig, axes = plt.subplots(
         nrows=1,
         ncols=number_of_axes,
         squeeze=True,
         figsize=(number_of_axes * 6, 6),
     )
+    fig.suptitle(file_path.split("/")[-1].split(".")[:-1])
 
     with torch.no_grad():
         YP = model.forward(X)  # model prediction
@@ -159,7 +161,7 @@ def plot(X, Y, model, file_path):
 
     # data with prediction
     ax = axes[0]
-    ax.set_title("Real and Predicted Values")
+    ax.set_title("Real and Predicted Values - Linear Scale")
     ax.plot(X.numpy(), Y.numpy(), "k.", label="real")
     ax.plot(X.numpy(), YP.numpy(), "r--", label="predicted")
     ax.set_xlabel("x")
@@ -167,8 +169,19 @@ def plot(X, Y, model, file_path):
     ax.legend()
     ax.grid("True")
 
-    # loss history
+    # data with prediction
     ax = axes[1]
+    ax.set_title("Real and Predicted Values - Log Scale")
+    ax.semilogy(X.numpy(), Y.numpy(), "k.", label="real")
+    ax.semilogy(X.numpy(), YP.numpy(), "r--", label="predicted")
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    ax.legend()
+    ax.grid("True")
+    ax.grid("True", which="minor", linestyle="--")
+
+    # loss history
+    ax = axes[2]
     ax.set_title("Model Loss History")
     ax.semilogy(loss_values_history, "r")
     ax.grid("True")
@@ -177,7 +190,7 @@ def plot(X, Y, model, file_path):
     ax.set_ylabel("Loss")
 
     # difference between the data and the prediction
-    ax = axes[2]
+    ax = axes[3]
     ax.set_title("Relative Difference")
     ax.semilogy(X.numpy(), diff.numpy(), "r-", label="|YPT - Y| / |Y|")
     ax.set_xlabel("x")
@@ -211,7 +224,9 @@ def log(model_info, error, args):
 
 if __name__ == "__main__":
     args = parse_args()
-    X, Y = generate_data(torch.exp)
+    # fn = lambda x: 3 * torch.sin(x) + 2 * torch.sin(2 * x) + 4 * torch.cos(4 * x)
+    fn = lambda x: torch.sin(x)
+    X, Y = generate_data(fn)
     model = make_model(
         args.number_of_hidden_layers, args.number_of_nodes_in_each_hidden_layer
     )
