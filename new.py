@@ -121,31 +121,58 @@ def make_summary(model, debug):
     return model_info
 
 
+class Dataset(torch.utils.data.Dataset):
+    def __init__(self, data):
+        last_column = data.shape[1]-1
+        self.length = len(data)
+        self.features = data[:,:last_column] # all but the last column
+        self.targets = data[:,last_column] # the last column
+
+    def __len__(self):
+        return self.length
+
+    def __getitem__(self, idx):
+        return (self.features[idx], self.targets[idx])
+
+
+def make_loader(X, Y, batch_size):
+    data = torch.hstack([X, Y])
+    dataset = Dataset(data)
+    loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False)
+    return loader
+
+
+
 def optimize(X, Y, model, learning_rate, number_of_iterations, debug):
     ## initialize
-    loss_function = lambda yp, y: torch.mean(torch.abs(yp - y) / torch.abs(y))
-    # loss_function = nn.MSELoss()  # loss function - mean square error
+    number_of_epochs = number_of_iterations
+    # loss_function = lambda yp, y: torch.mean(torch.abs(yp - y) / torch.abs(y))
+    loss_function = nn.MSELoss()  # loss function - mean square error
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     loss_values_history = []
+    loader = make_loader(X, Y, 100000)
 
+    Y = Y.view(-1, 1)
     ## optimization procedure
-    loop = range(number_of_iterations)
+    loop = range(number_of_epochs)
     if debug:
-        loop = tqdm(loop, desc="optimize", ascii=True)
-    for _ in loop:
-        # reinitialize gradients
-        optimizer.zero_grad()
-        # making predictions with forward pass
-        YP = model.forward(X)
-        # calculating the loss between original and predicted data points
-        loss = loss_function(YP, Y)
-        # backward pass for computing the gradients of the loss w.r.t to learnable parameters
-        loss.backward()
-        # updateing the parameters after each iteration
-        optimizer.step()
-        # storing the calculated loss in a list
-        loss_values_history.append(loss.item())
-
+        loop = tqdm(loop)
+    for epoch in loop:
+        for Xt, Yt in loader:
+            # reinitialize gradients
+            optimizer.zero_grad()
+            # making predictions with forward pass
+            YP = model.forward(Xt)
+            # calculating the loss between original and predicted data points
+            loss = loss_function(YP, Yt)
+            # backward pass for computing the gradients of the loss w.r.t to learnable parameters
+            loss.backward()
+            # updateing the parameters after each iteration
+            optimizer.step()
+            # storing the calculated loss in a list
+            loss_values_history.append(loss.item())
+            if debug: loop.set_postfix(loss=loss.item())
+        loop.set_description(f"Epoch {epoch}")
     return loss_values_history
 
 
